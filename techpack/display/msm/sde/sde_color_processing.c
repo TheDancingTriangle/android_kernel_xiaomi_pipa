@@ -3103,7 +3103,7 @@ static void sde_cp_notify_hist_event(struct drm_crtc *crtc_drm, void *arg)
 	u32 i, lock_hist = 0;
 
 	if (!crtc_drm || !arg) {
-		DRM_ERROR("invalid crtc %pK\n", crtc_drm);
+		DRM_ERROR("invalid drm crtc %pK or arg %pK\n", crtc_drm, arg);
 		return;
 	}
 
