@@ -259,7 +259,8 @@ struct sde_crtc_misr_info {
  * @frame_pending : Whether or not an update is pending
  * @frame_events  : static allocation of in-flight frame events
  * @frame_event_list : available frame event list
- * @spin_lock     : spin lock for frame event, transaction status, etc...
+ * @spin_lock     : spin lock for transaction status, etc...
+ * @fevent_spin_lock     : spin lock for frame event
  * @event_thread  : Pointer to event handler thread
  * @event_worker  : Event worker queue
  * @event_cache   : Local cache of event worker structures
