@@ -102,8 +102,6 @@ static void nvt_all_para_recovery(void);
 
 extern int dsi_panel_lockdown_info_read(unsigned char *plockdowninfo);
 extern void dsi_panel_doubleclick_enable(bool on);
-extern void touch_irq_boost(void);
-extern void lpm_disable_for_dev(bool on, char event_dev);
 
 uint32_t ENG_RST_ADDR  = 0x7FFF80;
 uint32_t SPI_RD_FAST_ADDR = 0;	//read from dtsi
@@ -1785,9 +1783,6 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 	}
 #endif
 
-	touch_irq_boost();
-	lpm_disable_for_dev(true, 0x1);
-
 	mutex_lock(&ts->lock);
 
 	if (ts->dev_pm_suspend) {
@@ -1870,7 +1865,6 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 			nvt_ts_pen_gesture_report(pen_format_id);
 		}
 		mutex_unlock(&ts->lock);
-		lpm_disable_for_dev(false, 0x1);
 		return IRQ_HANDLED;
 	}
 #endif
@@ -2056,7 +2050,6 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 XFER_ERROR:
 
 	mutex_unlock(&ts->lock);
-	lpm_disable_for_dev(false, 0x1);
 	return IRQ_HANDLED;
 }
 
