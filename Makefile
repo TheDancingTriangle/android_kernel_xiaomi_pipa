@@ -694,11 +694,8 @@ KBUILD_CFLAGS	+= $(call cc-disable-warning, format-overflow)
 KBUILD_CFLAGS	+= $(call cc-disable-warning, int-in-bool-context)
 KBUILD_CFLAGS	+= $(call cc-disable-warning, address-of-packed-member)
 
-ifeq ($(CONFIG_CC_OPTIMIZE_FOR_SIZE), y)
-KBUILD_CFLAGS   += -Os
-KBUILD_AFLAGS   += -Os
-KBUILD_LDFLAGS  += -Os
-else ifeq ($(cc-name),clang)
+
+ifeq ($(CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3), y)
 KBUILD_CFLAGS   += -O3
 KBUILD_AFLAGS   += -O3
 KBUILD_LDFLAGS  += -O3
