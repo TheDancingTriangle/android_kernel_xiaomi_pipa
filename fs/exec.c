@@ -103,6 +103,16 @@ void dead_special_task(void)
 static LIST_HEAD(formats);
 static DEFINE_RWLOCK(binfmt_lock);
 
+#define ZYGOTE32_BIN "/system/bin/app_process32"
+#define ZYGOTE64_BIN "/system/bin/app_process64"
+static struct task_struct *zygote32_task;
+static struct task_struct *zygote64_task;
+
+bool task_is_zygote(struct task_struct *task)
+{
+	return task == zygote32_task || task == zygote64_task;
+}
+
 void __register_binfmt(struct linux_binfmt * fmt, int insert)
 {
 	BUG_ON(!fmt);
@@ -1924,6 +1934,13 @@ static int __do_execve_file(int fd, struct filename *filename,
 		if (unlikely(!strcmp(filename->name, XIAOMI_LIBPERFMGR_BIN)) ||
 		    unlikely(!strcmp(filename->name, LINEAGE_LIBPERFMGR_BIN)))
 			WRITE_ONCE(libperfmgr_tsk, current);
+	}
+
+	if (capable(CAP_SYS_ADMIN)) {
+		if (unlikely(!strcmp(filename->name, ZYGOTE32_BIN)))
+			zygote32_task = current;
+		else if (unlikely(!strcmp(filename->name, ZYGOTE64_BIN)))
+                        zygote64_task = current;
 	}
 
 	/* execve succeeded */
