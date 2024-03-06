@@ -704,11 +704,11 @@ KBUILD_CFLAGS	+= $(call cc-disable-warning, address-of-packed-member)
 ifeq ($(CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3), y)
 KBUILD_CFLAGS   += -O3
 KBUILD_AFLAGS   += -O3
-KBUILD_LDFLAGS  += -O3
+KBUILD_LDFLAGS  += -O3 -S
 else
 KBUILD_CFLAGS   += -O2
 KBUILD_AFLAGS   += -O2
-KBUILD_LDFLAGS  += -O2
+KBUILD_LDFLAGS  += -O2 -S
 endif
 
 # Enable fast FMA optimizations
