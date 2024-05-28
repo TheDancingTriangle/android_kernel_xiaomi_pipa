@@ -222,9 +222,13 @@ struct dsi_panel_mi_cfg {
 	bool dynamic_elvss_enabled;
 
 	int esd_err_irq_gpio;
+	int esd_err_irq_gpio_sec;
 	int esd_err_irq;
+	int esd_err_irq_sec;
 	int esd_err_irq_flags;
+	int esd_err_irq_gpio_flags_sec;
 	bool esd_err_enabled;
+	bool esd_err_sec_enabled;
 
 	/* elvss dimming info */
 	bool elvss_dimming_check_enable;
@@ -322,6 +326,8 @@ struct dsi_panel_mi_cfg {
 
 	bool nolp_b2reg_ctrl_flag;
 	u32 nolp_b2reg_index;
+
+	u32 last_fps;
 };
 
 struct dsi_read_config {
@@ -366,8 +372,6 @@ int dsi_panel_write_mipi_reg(struct dsi_panel *panel, char *buf);
 
 ssize_t dsi_panel_read_mipi_reg(struct dsi_panel *panel, char *buf);
 
-bool dsi_panel_is_need_tx_cmd(u32 param);
-
 int dsi_panel_set_disp_param(struct dsi_panel *panel, u32 param);
 
 int dsi_panel_read_gamma_param(struct dsi_panel *panel);
@@ -411,5 +415,8 @@ int dsi_panel_lockdowninfo_param_read(struct dsi_panel *panel);
 int dsi_panel_power_turn_off(bool on);
 
 int mi_dsi_panel_set_fod_brightness(struct mipi_dsi_device *dsi, u16 brightness);
+int mi_dsi_panel_dc_switch(struct dsi_panel *panel, bool enabled);
+
+int mi_dsi_pwr_enable_vregs(struct dsi_regulator_info *regs, bool enable, int index);
 
 #endif /* _DSI_PANEL_MI_H_ */

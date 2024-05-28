@@ -59,12 +59,6 @@ int dsi_display_set_disp_param(struct drm_connector *connector,
 	}
 
 	atomic64_set(&g_param, param_type);
-	if (sde_kms_is_suspend_blocked(display->drm_dev) &&
-		dsi_panel_is_need_tx_cmd(param_type)) {
-		pr_err("sde_kms is suspended, skip to set_disp_param\n");
-		return -EBUSY;
-	}
-
 	ret = dsi_panel_set_disp_param(display->panel, param_type);
 
 	return ret;

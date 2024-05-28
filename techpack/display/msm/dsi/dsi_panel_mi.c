@@ -27,7 +27,6 @@
 #include "dsi_mi_feature.h"
 #include "drm_mipi_dsi.h"
 #include "../../../../kernel/irq/internals.h"
-
 #include "mi_disp_nvt_alpha_data.h"
 #include "mi_disp_lhbm.h"
 
@@ -326,22 +325,56 @@ static int dsi_panel_parse_elvss_dimming_config(struct dsi_panel *panel,
 int dsi_panel_parse_esd_gpio_config(struct dsi_panel *panel)
 {
 	int rc = 0;
+	int rc2 = 0;
 	struct dsi_parser_utils *utils = &panel->utils;
 	struct dsi_panel_mi_cfg *mi_cfg = &panel->mi_cfg;
 
 	mi_cfg->esd_err_irq_gpio = of_get_named_gpio_flags(
 			utils->data, "mi,esd-err-irq-gpio",
 			0, (enum of_gpio_flags *)&(mi_cfg->esd_err_irq_flags));
-	if (gpio_is_valid(mi_cfg->esd_err_irq_gpio)) {
-		mi_cfg->esd_err_irq = gpio_to_irq(mi_cfg->esd_err_irq_gpio);
-		rc = gpio_request(mi_cfg->esd_err_irq_gpio, "esd_err_irq_gpio");
-		if (rc)
-			pr_err("Failed to request esd irq gpio %d, rc=%d\n",
-				mi_cfg->esd_err_irq_gpio, rc);
-		else
-			gpio_direction_input(mi_cfg->esd_err_irq_gpio);
+
+	if( !strcmp(panel->name,"xiaomi m82 36 02 0a video mode dual dsi dphy panel") || 
+		!strcmp(panel->name,"xiaomi m82 42 02 0b video mode dual dsi dphy panel"))
+	{
+		mi_cfg->esd_err_irq_gpio_sec = of_get_named_gpio_flags(
+			utils->data, "mi,esd-err-irq-gpio-sec",
+			0, (enum of_gpio_flags *)&(mi_cfg->esd_err_irq_gpio_flags_sec));
+
+		if (gpio_is_valid(mi_cfg->esd_err_irq_gpio) && gpio_is_valid(mi_cfg->esd_err_irq_gpio_sec)) {
+
+			pr_info("dsi_panel_parse_esd_gpio_config esd1:%d, esd2:%d\n", mi_cfg->esd_err_irq_gpio,mi_cfg->esd_err_irq_gpio_sec);
+
+			mi_cfg->esd_err_irq = gpio_to_irq(mi_cfg->esd_err_irq_gpio);
+			rc = gpio_request(mi_cfg->esd_err_irq_gpio, "esd_err_irq_gpio");
+
+			mi_cfg->esd_err_irq_sec = gpio_to_irq(mi_cfg->esd_err_irq_gpio_sec);
+			rc2 = gpio_request(mi_cfg->esd_err_irq_gpio_sec, "esd_err_irq_gpio_sec");
+
+			if (rc || rc2)
+				pr_err("Failed to request esd irq gpio %d, rc=%d\n",
+					mi_cfg->esd_err_irq_gpio, rc);
+			else {
+				gpio_direction_input(mi_cfg->esd_err_irq_gpio);
+				gpio_direction_input(mi_cfg->esd_err_irq_gpio_sec);
+			}
+
+		} else {
+			pr_info("dsi_panel_parse_esd_gpio_config esd failed!!!!\n");
+			rc = -EINVAL;
+		}
+		return (rc || rc2);
 	} else {
-		rc = -EINVAL;
+		if (gpio_is_valid(mi_cfg->esd_err_irq_gpio)) {
+			mi_cfg->esd_err_irq = gpio_to_irq(mi_cfg->esd_err_irq_gpio);
+			rc = gpio_request(mi_cfg->esd_err_irq_gpio, "esd_err_irq_gpio");
+			if (rc)
+				pr_err("Failed to request esd irq gpio %d, rc=%d\n",
+					mi_cfg->esd_err_irq_gpio, rc);
+			else
+				gpio_direction_input(mi_cfg->esd_err_irq_gpio);
+		} else {
+			rc = -EINVAL;
+		}
 	}
 
 	return rc;
@@ -857,7 +890,34 @@ int dsi_panel_esd_irq_ctrl_locked(struct dsi_panel *panel,
 	} else {
 		pr_info("%s panel esd irq gpio invalid\n", panel->type);
 	}
-
+	pr_info("dsi_panel_esd_irq_ctrl_locked 0x%llx\n", panel->mi_cfg.panel_id);
+	if((panel->mi_cfg.panel_id == 0x4D38324100360200) || (panel->mi_cfg.panel_id == 0x4D38324100420200))
+	{
+		if (gpio_is_valid(mi_cfg->esd_err_irq_gpio_sec)) {
+			if (mi_cfg->esd_err_irq_sec) {
+				if (enable) {
+					if (!mi_cfg->esd_err_sec_enabled) {
+						desc = irq_to_desc(mi_cfg->esd_err_irq_sec);
+						if (!irq_settings_is_level(desc))
+							desc->istate &= ~IRQS_PENDING;
+						enable_irq_wake(mi_cfg->esd_err_irq_sec);
+						enable_irq(mi_cfg->esd_err_irq_sec);
+						mi_cfg->esd_err_sec_enabled = true;
+						pr_info("%s panel esd2 irq is enable\n", panel->type);
+					}
+				} else {
+					if (mi_cfg->esd_err_sec_enabled) {
+						disable_irq_wake(mi_cfg->esd_err_irq_sec);
+						disable_irq_nosync(mi_cfg->esd_err_irq_sec);
+						mi_cfg->esd_err_sec_enabled = false;
+						pr_info("%s panel esd2 irq is disable\n", panel->type);
+					}
+				}
+			}
+		} else {
+			pr_info("%s panel esd2 irq gpio invalid\n", panel->type);
+		}
+	}
 	return 0;
 }
 
@@ -1281,17 +1341,24 @@ int dsi_panel_match_fps_pen_setting(struct dsi_panel *panel,
 		pr_debug("DSI_CMD_SET_DISP_PEN_120HZ not defined, return\n");
 		return 0;
 	}
-
-	/* match fps(120/60/30Hz) pen seeting cmd */
+	/* match fps(120/60/30/144/48/50Hz) pen seeting cmd */
 	if (adj_mode->timing.refresh_rate == 120)
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_PEN_120HZ);
 	else if (adj_mode->timing.refresh_rate == 60)
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_PEN_60HZ);
 	else if (adj_mode->timing.refresh_rate == 30)
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_PEN_30HZ);
+	else if (adj_mode->timing.refresh_rate == 90)
+		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_PEN_90HZ);
+	else if (adj_mode->timing.refresh_rate == 144)
+		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_PEN_144HZ);
+	else if (adj_mode->timing.refresh_rate == 50)
+		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_PEN_50HZ);
+	else if (adj_mode->timing.refresh_rate == 48)
+		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_PEN_48HZ);
 
 	if (rc) {
-		pr_err("Failed to send DSI_CMD_SET_DISP_PEN_120HZ command\n");
+		pr_err("Failed to send DSI_CMD_SET_DISP_PEN command\n");
 		retval = -EAGAIN;
 		goto error;
 	}else
@@ -2559,6 +2626,36 @@ int dsi_panel_update_dc_param(struct dsi_panel *panel)
 	return 0;
 }
 
+int mi_dsi_panel_dc_switch(struct dsi_panel *panel, bool enabled)
+{
+	int rc = 0;
+
+	if (!panel) {
+		DSI_ERR("Invalid params\n");
+		return -EINVAL;
+	}
+
+	mutex_lock(&panel->panel_lock);
+
+	if (enabled) {
+		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_MI_DC_ON);
+		if (rc)
+			DSI_ERR("[%s] failed to send DSI_CMD_SET_MI_DC_ON cmd, rc=%d\n",
+					panel->name, rc);
+	} else {
+		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_MI_DC_OFF);
+		if (rc)
+			DSI_ERR("[%s] failed to send DSI_CMD_SET_MI_DC_OFF cmd, rc=%d\n",
+				panel->name, rc);
+	}
+	pr_debug("[%s] tx dc success, dc status %d",
+		panel->name, enabled);
+
+	mutex_unlock(&panel->panel_lock);
+	display_utc_time_marker("DSI_CMD_SET_DC_CMD");
+	return rc;
+}
+
 int dsi_panel_switch_disp_rate_gpio(struct dsi_panel *panel)
 {
 	struct dsi_panel_mi_cfg *mi_cfg;
@@ -3137,6 +3234,9 @@ int dsi_panel_lockdowninfo_param_read(struct dsi_panel *panel)
 	if (cmd_sets->cmds) {
 		read_cmd_set.cmds = cmd_sets->cmds;
 		read_cmd_set.count = 1;
+		if (mi_cfg->panel_id == 0x4D38324100420200) {
+			read_cmd_set.count = 2;
+		}
 		read_cmd_set.state = cmd_sets->state;
 		rc = dsi_panel_write_cmd_set(panel, &read_cmd_set);
 		if (rc) {
@@ -3153,6 +3253,9 @@ int dsi_panel_lockdowninfo_param_read(struct dsi_panel *panel)
 			ld_read_config.cmds_rlen = 8;
 			ld_read_config.read_cmd = read_cmd_set;
 			ld_read_config.read_cmd.cmds = &read_cmd_set.cmds[1];
+			if (mi_cfg->panel_id == 0x4D38324100420200) {
+				ld_read_config.read_cmd.cmds = &read_cmd_set.cmds[2];
+			}
 			rc = dsi_panel_read_cmd_set(panel, &ld_read_config);
 			if (rc <= 0) {
 				pr_err("[%s] failed to read cmds, rc=%d\n", panel->name, rc);
@@ -3390,20 +3493,6 @@ static int mi_dsi_update_lhbm_cmd_87reg(struct dsi_panel *panel,
 	return rc;
 }
 
-bool dsi_panel_is_need_tx_cmd(u32 param)
-{
-	if ((param & 0x0F000000) != DISPPARAM_FOD_BACKLIGHT_ON
-		|| (param & 0x0F000000) != DISPPARAM_FOD_BACKLIGHT_OFF
-		|| param != DISPPARAM_FOD_UNLOCK_SUCCESS
-		|| param != DISPPARAM_SET_THERMAL_HBM_DISABLE
-		|| param != DISPPARAM_CLEAR_THERMAL_HBM_DISABLE
-		|| (param & 0x0000F000) != DISPPARAM_LOW_BRIGHTNESS_FOD
-		|| (param & 0x0000F000) != DISPPARAM_FP_STATUS) {
-		return false;
-	}else
-		return true;
-}
-
 int dsi_panel_set_disp_param(struct dsi_panel *panel, u32 param)
 {
 	int rc = 0;
@@ -3439,6 +3528,7 @@ int dsi_panel_set_disp_param(struct dsi_panel *panel, u32 param)
 		&& (param & 0x0F000000) != DISPPARAM_FOD_BACKLIGHT_ON
 		&& (param & 0x0F000000) != DISPPARAM_FOD_BACKLIGHT_OFF
 		&& param != DISPPARAM_FOD_UNLOCK_SUCCESS
+		&& param != DISPPARAM_FOD_UNLOCK_FAIL
 		&& param != DISPPARAM_SET_THERMAL_HBM_DISABLE
 		&& param != DISPPARAM_CLEAR_THERMAL_HBM_DISABLE
 		&& (param & 0x0000F000) != DISPPARAM_LOW_BRIGHTNESS_FOD
@@ -3636,7 +3726,6 @@ int dsi_panel_set_disp_param(struct dsi_panel *panel, u32 param)
 				pr_info("thermal clear hbm limit, restore previous hbm on\n");
 			}
 			mi_cfg->dimming_state = STATE_DIM_BLOCK;
-
 		}
 		break;
 	case DISPPARAM_HBM_OFF:
@@ -3755,17 +3844,17 @@ int dsi_panel_set_disp_param(struct dsi_panel *panel, u32 param)
 				mi_dsi_update_lhbm_cmd_87reg(panel, DSI_CMD_SET_MI_FOD_LHBM_WHITE_110NIT, mi_cfg->last_bl_level);
 				if (panel->power_mode == SDE_MODE_DPMS_LP1 ||panel->power_mode == SDE_MODE_DPMS_LP2){
 					switch (mi_cfg->doze_brightness_state) {
-						case DOZE_BRIGHTNESS_HBM:
-							mi_dsi_update_lhbm_cmd_87reg(panel, DSI_CMD_SET_MI_FOD_LHBM_WHITE_1000NIT, mi_cfg->doze_hbm_dbv_level);
-							pr_info("DSI_CMD_SET_MI_FOD_LHBM_WHITE_1000NIT in doze_hbm_dbv_level\n");
-							break;
-						case DOZE_BRIGHTNESS_LBM:
-							mi_dsi_update_lhbm_cmd_87reg(panel, DSI_CMD_SET_MI_FOD_LHBM_WHITE_1000NIT, mi_cfg->doze_lbm_dbv_level);
-							pr_info("DSI_CMD_SET_MI_FOD_LHBM_WHITE_1000NIT in doze_lbm_dbv_level\n");
-							break;
-						default:
-							pr_info("DSI_CMD_SET_MI_FOD_LHBM_WHITE_1000NIT defaults\n");
-							break;
+					case DOZE_BRIGHTNESS_HBM:
+						mi_dsi_update_lhbm_cmd_87reg(panel, DSI_CMD_SET_MI_FOD_LHBM_WHITE_110NIT, mi_cfg->doze_hbm_dbv_level);
+						pr_info("DSI_CMD_SET_MI_FOD_LHBM_WHITE_110NIT in doze_hbm_dbv_level\n");
+						break;
+					case DOZE_BRIGHTNESS_LBM:
+						mi_dsi_update_lhbm_cmd_87reg(panel, DSI_CMD_SET_MI_FOD_LHBM_WHITE_110NIT, mi_cfg->doze_lbm_dbv_level);
+						pr_info("DSI_CMD_SET_MI_FOD_LHBM_WHITE_110NIT in doze_lbm_dbv_level\n");
+						break;
+					default:
+						pr_info("DSI_CMD_SET_MI_FOD_LHBM_WHITE_110NIT defaults\n");
+						break;
 					}
 				}
 
@@ -3959,10 +4048,6 @@ int dsi_panel_set_disp_param(struct dsi_panel *panel, u32 param)
 		pr_info("Fod fingerprint unlock fail\n");
 		mi_cfg->sysfs_fod_unlock_success = false;
 		mi_cfg->into_aod_pending = false;
-		if(mi_cfg->local_hbm_enabled){
-			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_MI_FOD_LHBM_OFF);
-			mi_cfg->local_hbm_cur_status = false;
-		}
 		if (panel->power_mode == SDE_MODE_DPMS_LP1 ||
 				panel->power_mode == SDE_MODE_DPMS_LP2) {
 			cancel_delayed_work(&mi_cfg->enter_aod_delayed_work);
@@ -4156,3 +4241,105 @@ exit:
 	return rc;
 }
 
+int mi_dsi_pwr_enable_vregs(struct dsi_regulator_info *regs, bool enable, int index)
+{
+	int rc = 0;
+	struct dsi_vreg *vreg;
+	int num_of_v = 0;
+	u32 pre_on_ms, post_on_ms;
+	u32 pre_off_ms, post_off_ms;
+	if (enable) {
+		vreg = &regs->vregs[index];
+		pre_on_ms = vreg->pre_on_sleep;
+		post_on_ms = vreg->post_on_sleep;
+		DSI_INFO("mi_dsi_pwr_enable_vregs for %s, enable:%d\n",vreg->vreg_name,enable);
+		if (vreg->pre_on_sleep)
+			usleep_range((pre_on_ms * 1000),
+					(pre_on_ms * 1000) + 10);
+
+		rc = regulator_set_load(vreg->vreg,
+					vreg->enable_load);
+		if (rc < 0) {
+			DSI_ERR("Setting optimum mode failed for %s\n",
+					vreg->vreg_name);
+			goto error;
+		}
+		num_of_v = regulator_count_voltages(vreg->vreg);
+		if (num_of_v > 0) {
+			rc = regulator_set_voltage(vreg->vreg,
+							vreg->min_voltage,
+							vreg->max_voltage);
+			if (rc) {
+				DSI_ERR("Set voltage(%s) fail, rc=%d\n",
+						vreg->vreg_name, rc);
+				goto error_disable_opt_mode;
+			}
+		}
+
+		rc = regulator_enable(vreg->vreg);
+		if (rc) {
+			DSI_ERR("enable failed for %s, rc=%d\n",
+					vreg->vreg_name, rc);
+			goto error_disable_voltage;
+		}
+
+		if (vreg->post_on_sleep)
+			usleep_range((post_on_ms * 1000),
+					(post_on_ms * 1000) + 10);
+	} else {
+		vreg = &regs->vregs[index];
+		pre_off_ms = vreg->pre_off_sleep;
+		post_off_ms = vreg->post_off_sleep;
+		DSI_ERR("mi_dsi_pwr_enable_vregs for %s, enable:%d\n",vreg->vreg_name,enable,index);
+		if (pre_off_ms)
+			usleep_range((pre_off_ms * 1000),
+					(pre_off_ms * 1000) + 10);
+
+		if (regs->vregs[index].off_min_voltage)
+			(void)regulator_set_voltage(regs->vregs[index].vreg,
+					regs->vregs[index].off_min_voltage,
+					regs->vregs[index].max_voltage);
+
+		(void)regulator_set_load(regs->vregs[index].vreg,
+					regs->vregs[index].disable_load);
+		(void)regulator_disable(regs->vregs[index].vreg);
+
+		if (post_off_ms)
+			usleep_range((post_off_ms * 1000),
+					(post_off_ms * 1000) + 10);
+	}
+
+	return 0;
+error_disable_opt_mode:
+	(void)regulator_set_load(regs->vregs[index].vreg,
+				 regs->vregs[index].disable_load);
+
+error_disable_voltage:
+	if (num_of_v > 0)
+		(void)regulator_set_voltage(regs->vregs[index].vreg,
+					    0, regs->vregs[index].max_voltage);
+error:
+	vreg = &regs->vregs[index];
+	pre_off_ms = vreg->pre_off_sleep;
+	post_off_ms = vreg->post_off_sleep;
+
+	if (pre_off_ms)
+		usleep_range((pre_off_ms * 1000),
+				(pre_off_ms * 1000) + 10);
+
+	(void)regulator_set_load(regs->vregs[index].vreg,
+					regs->vregs[index].disable_load);
+
+	num_of_v = regulator_count_voltages(regs->vregs[index].vreg);
+	if (num_of_v > 0)
+		(void)regulator_set_voltage(regs->vregs[index].vreg,
+					0, regs->vregs[index].max_voltage);
+
+	(void)regulator_disable(regs->vregs[index].vreg);
+
+	if (post_off_ms)
+		usleep_range((post_off_ms * 1000),
+				(post_off_ms * 1000) + 10);
+
+	return rc;
+}

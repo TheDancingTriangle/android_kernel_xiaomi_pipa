@@ -399,8 +399,12 @@ enum dsi_cmd_set_type {
 	DSI_CMD_SET_MI_GAMMA_B7,
 	DSI_CMD_SET_MI_BLACK_SETTING,
 	DSI_CMD_SET_MI_READ_LOCKDOWN_INFO,
+	DSI_CMD_SET_DISP_PEN_144HZ,
 	DSI_CMD_SET_DISP_PEN_120HZ,
+	DSI_CMD_SET_DISP_PEN_90HZ,
 	DSI_CMD_SET_DISP_PEN_60HZ,
+	DSI_CMD_SET_DISP_PEN_50HZ,
+	DSI_CMD_SET_DISP_PEN_48HZ,
 	DSI_CMD_SET_DISP_PEN_30HZ,
 	DSI_CMD_SET_DISABLE_INSERT_BLACK,
 	DSI_CMD_SET_INSERT_BLACK,
@@ -408,6 +412,7 @@ enum dsi_cmd_set_type {
 	DSI_CMD_SET_MI_ROUND_OFF,
 	DSI_CMD_SET_MI_DIM_FP_DBV_MAX_IN_HBM,
 	DSI_CMD_SET_MI_DIM_FP_DBV_MAX_IN_NORMAL,
+	DSI_CMD_SET_DISP_PEN_CLEAR,
 	/* xiaomi add end */
 	DSI_CMD_SET_MAX
 };
@@ -619,8 +624,10 @@ struct dsi_host_common_cfg {
 	u32 byte_intf_clk_div;
 	u32 clk_strength;
 	bool cphy_strength;
+        u32 phy_voltage;
 	u32 dma_sched_line;
 	u32 dma_sched_window;
+	u32 phy_voltage;
 };
 
 /**
