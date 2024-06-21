@@ -55,8 +55,8 @@ ifeq ($(CONFIG_CC_IS_CLANG), y)
   endif
 endif
 
-# Disable gcov profiling for VDSO code
-GCOV_PROFILE := n
+# Disable gcov and PGO profiling for VDSO code
+PGO_PROFILE := n
 
 obj-y += vdso.o
 extra-y += vdso.lds
