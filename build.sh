@@ -28,7 +28,7 @@ fi
 
 # Check Dependencies
 REQUIRED_PKGS=(
-    bc binutils-dev bison build-essential ca-certificates ccache clang cmake
+    bc binutils-dev bison build-essential ca-certificates ccache clang cmake jq
     cpio curl file flex git libelf-dev libssl-dev lld make ninja-build python3-dev
     texinfo u-boot-tools xz-utils zlib1g-dev wget git
 )
@@ -60,6 +60,63 @@ else
 fi
 
 echo "🚀 Dependencies checked. Continuing..."
+
+# Define directories and URLs
+TC_DIR=$(pwd)/tc
+CLANG_VERSION_FILE="$TC_DIR/clang_version.txt"
+LATEST_RELEASE_API="https://api.github.com/repos/ZyCromerZ/Clang/releases/latest"
+
+# Ensure jq is installed
+if ! command -v jq &>/dev/null; then
+    echo "Error: jq is required but not installed. Install it and rerun the script."
+    exit 1
+fi
+
+# Create toolchain directory if not exists
+mkdir -p "$TC_DIR"
+
+# Fetch latest release information
+echo "Fetching latest Clang release info..."
+LATEST_TAG=$(curl -s "$LATEST_RELEASE_API" | jq -r '.tag_name')
+
+# Ensure valid tag name was retrieved
+if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" == "null" ]; then
+    echo "Failed to fetch latest release tag!"
+    exit 1
+fi
+
+# Check if the latest version is already installed
+if [ -f "$CLANG_VERSION_FILE" ] && grep -q "$LATEST_TAG" "$CLANG_VERSION_FILE"; then
+    echo "Clang is already up to date ($LATEST_TAG). Skipping download."
+else
+    echo "New Clang version found ($LATEST_TAG). Downloading..."
+
+    # Extract Clang tarball URL
+    CLANG_TAR_URL=$(curl -s "$LATEST_RELEASE_API" | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url')
+
+    # Ensure a valid tarball URL was found
+    if [ -z "$CLANG_TAR_URL" ] || [ "$CLANG_TAR_URL" == "null" ]; then
+        echo "Failed to find a valid Clang tar.gz URL!"
+        exit 1
+    fi
+
+    # Download the latest Clang tarball
+    wget -O "$TC_DIR/clang.tar.gz" "$CLANG_TAR_URL"
+
+    # Extract Clang
+    tar -xvzf "$TC_DIR/clang.tar.gz" -C "$TC_DIR"
+
+    # Remove old Clang files but keep clang_version.txt
+    find "$TC_DIR" -mindepth 1 -not -name "clang_version.txt" -delete
+
+    # Remove the tarball after extraction
+    rm -f "$TC_DIR/clang.tar.gz"
+
+    # Save the latest version info
+    echo "$LATEST_TAG" > "$CLANG_VERSION_FILE"
+
+    echo "Clang updated to $LATEST_TAG."
+fi
 
 if [ ! -d $TOOLCHAIN_PATH ]; then
     echo "TOOLCHAIN_PATH [$TOOLCHAIN_PATH] does not exist."
