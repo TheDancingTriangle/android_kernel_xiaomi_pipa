@@ -26,6 +26,41 @@ if [[ "$build_choice" != "1" && "$build_choice" != "2" ]]; then
     exit 1
 fi
 
+# Check Dependencies
+REQUIRED_PKGS=(
+    bc binutils-dev bison build-essential ca-certificates ccache clang cmake
+    cpio curl file flex git libelf-dev libssl-dev lld make ninja-build python3-dev
+    texinfo u-boot-tools xz-utils zlib1g-dev wget git
+)
+
+is_installed() {
+    dpkg -l | grep -qw "$1"
+}
+
+MISSING_PKGS=()
+for pkg in "${REQUIRED_PKGS[@]}"; do
+    if ! is_installed "$pkg"; then
+        MISSING_PKGS+=("$pkg")
+    fi
+done
+
+if [ ${#MISSING_PKGS[@]} -eq 0 ]; then
+    echo "✅ All required packages are already installed!"
+else
+    if ! grep -q "^deb .*universe" /etc/apt/sources.list; then
+        echo "🔹 Adding universe repository..."
+        sudo add-apt-repository -y universe || { echo "❌ Failed to add universe repo!"; exit 1; }
+    fi
+
+    echo "🔄 Updating package lists..."
+    sudo apt update || { echo "❌ Failed to update packages!"; exit 1; }
+
+    echo "⬇️ Installing missing packages: ${MISSING_PKGS[*]}"
+    sudo apt install -y "${MISSING_PKGS[@]}" || { echo "❌ Failed to install required packages!"; exit 1; }
+fi
+
+echo "🚀 Dependencies checked. Continuing..."
+
 if [ ! -d $TOOLCHAIN_PATH ]; then
     echo "TOOLCHAIN_PATH [$TOOLCHAIN_PATH] does not exist."
     echo "Please ensure the toolchain is there, or change TOOLCHAIN_PATH in the script to your toolchain path."
@@ -50,8 +85,8 @@ if ! command -v clang >/dev/null 2>&1; then
     exit 1
 fi
 
-# Enable ccache for speed up compiling 
-export CCACHE_DIR="$HOME/.cache/ccache_mikernel" 
+# Enable ccache for speed up compiling
+export CCACHE_DIR="$HOME/.cache/ccache_mikernel"
 export CC="ccache gcc"
 export CXX="ccache g++"
 export PATH="/usr/lib/ccache:$PATH"
