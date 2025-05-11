@@ -21,11 +21,7 @@ drm-y       :=	drm_auth.o drm_bufs.o drm_cache.o \
 		drm_syncobj.o drm_lease.o drm_writeback.o drm_client.o \
 		drm_notifier_mi.o
 
-ifeq ($(CONFIG_XIAOMI_MIUI), y)
 drm-y += drm_ioctl_mi.o drm_sysfs_mi.o
-else
-drm-y += drm_ioctl.o drm_sysfs.o
-endif
 
 drm-$(CONFIG_DRM_LIB_RANDOM) += lib/drm_random.o
 drm-$(CONFIG_DRM_VM) += drm_vm.o
