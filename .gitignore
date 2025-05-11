@@ -136,3 +136,6 @@ all.config
 kernel/configs/android-*.cfg
 
 out/
+tc/
+anykernel/
+error.log
